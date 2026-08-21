@@ -1,0 +1,41 @@
+name: Windows RDP
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 9999
+    steps:
+    - name: Enable RDP Access
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -value 1
+        Set-Service -Name Audiosrv -StartupType 'Automatic'
+        Start-Service Audiosrv
+        reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v fAllowAudioPlayback /t REG_DWORD /d 1 /f
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v fDisableAudioCapture /t REG_DWORD /d 0 /f
+        net user runneradmin ThePassword123!
+    - name: Start Tailscale VPN and get connection URL
+      shell: bash
+      run: |
+        choco install tailscale -y
+        /c/Program\ Files/Tailscale/tailscale.exe up --authkey "tskey-auth-kYh1SEq5mP11CNTRL-oP2H8DZpHiMrHCxDjyxZiMYr7gK9FdWz"
+        IP=$(/c/Program\ Files/Tailscale/tailscale.exe ip -4)
+        sleep 15
+        URL=$IP
+        if [ ! -z "$URL" ]; then
+            echo "==========================================================="
+            echo "RDP is Ready!"
+            echo "Connect using this address: $URL"
+            echo "Username: runneradmin"
+            echo "Password: ThePassword123!"
+            echo "Note: Tailscale VPN tunnel is active securely."
+            echo "==========================================================="
+            sleep 21600
+        else
+            echo "Error: Pinggy failed to start. See logs below."
+            echo "--- Pinggy Logs ---"
+            cat tailscale_install.log
+            exit 1
+        fi
+
